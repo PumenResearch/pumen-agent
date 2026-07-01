@@ -6,6 +6,15 @@ and initializing the Command Line Interface (CLI) session.
 """
 
 from dotenv import load_dotenv
+import os
+import logging
+import warnings
+
+# Suppress all noisy logs and warnings that might interfere with the CLI UI
+os.environ["BROWSER_USE_LOGGING_LEVEL"] = "error"
+warnings.filterwarnings("ignore")
+logging.basicConfig(level=logging.CRITICAL)
+logging.getLogger().setLevel(logging.CRITICAL)
 
 # Load environment variables from .env file, overriding system variables if they exist.
 load_dotenv(override=True)

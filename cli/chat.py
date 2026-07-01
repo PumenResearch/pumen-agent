@@ -158,9 +158,15 @@ def start_chat_session() -> None:
         fetch_models_async() # Preload models
         gemini_provider: Optional[GeminiProvider] = GeminiProvider(model_name=CURRENT_MODEL)
         console.print("[green]Successfully connected to Gemini![/]\n")
+        
+        from tools import SkillRegistry, DecisionEngine
+        registry = SkillRegistry()
+        decision_engine: Optional[DecisionEngine] = DecisionEngine(registry, llm_provider=gemini_provider)
+        console.print("[green]Decision Engine initialized![/]\n")
     except Exception as e:
-        console.print(f"[bold red]Failed to initialize Gemini: {e}[/]\n")
+        console.print(f"[bold red]Failed to initialize Gemini or Tools: {e}[/]\n")
         gemini_provider = None
+        decision_engine = None
 
     completer = CommandCompleter(console)
     history = InMemoryHistory()
@@ -293,12 +299,56 @@ def start_chat_session() -> None:
                 if gemini_provider.model_name != CURRENT_MODEL:
                     console.print(f"[dim]Reinitializing chat session with model {CURRENT_MODEL}...[/]")
                     gemini_provider = GeminiProvider(model_name=CURRENT_MODEL)
+                    if decision_engine:
+                        decision_engine.llm = gemini_provider
 
-                accumulated_text = ""
-                with Live(Padding(Markdown(accumulated_text), (0, 0, 0, 2)), console=console, refresh_per_second=10) as live:
-                    for chunk in gemini_provider.send_message_stream(user_input):
-                        accumulated_text += chunk
-                        live.update(Padding(Markdown(accumulated_text), (0, 0, 0, 2)))
+                chosen_skill = "UNKNOWN"
+                if decision_engine:
+                    with console.status("[dim]Analyzing task intent...[/]", spinner="dots"):
+                        decision = decision_engine.decide_skill(user_input)
+                    console.print("[dim]✔ Analyzing task intent...[/]")
+                    chosen_skill = decision.get("skill", "UNKNOWN")
+                    
+                    if chosen_skill != "UNKNOWN":
+                        console.print(f"[bold green]Skill selected:[/] {chosen_skill}")
+                        console.print(f"[dim]Reasoning: {decision.get('analysis')}[/]")
+                        
+                        if chosen_skill == "browser_automation":
+                            import asyncio
+                            from skills.browser_automation import initialize_browser, BrowserAgentRunner
+                            
+                            async def run_browser_task():
+                                browser = initialize_browser(headless=False)
+                                runner = BrowserAgentRunner(browser)
+                                try:
+                                    with console.status("[dim]Executing browser automation task...[/]", spinner="dots"):
+                                        history = await runner.run_task(user_input)
+                                    console.print("[dim]✔ Executing browser automation task...[/]")
+                                    console.print("\n[bold green]Browser task completed![/]")
+                                    
+                                    # Render the final result natively using rich Markdown
+                                    from rich.markdown import Markdown
+                                    console.print(Markdown(history.final_result()))
+                                except Exception as e:
+                                    console.print(f"[bold red]Browser automation failed: {e}[/]")
+                                    
+                            asyncio.run(run_browser_task())
+                            
+                        elif chosen_skill == "computer_use":
+                            console.print("[yellow]Computer use skill is a placeholder and not yet fully implemented.[/]")
+                        else:
+                            console.print(f"[yellow]Skill '{chosen_skill}' is registered but not explicitly wired for execution yet.[/]")
+
+                # Fallback to normal chat if UNKNOWN
+                if chosen_skill == "UNKNOWN":
+                    if decision_engine:
+                        console.print("[dim]No specific skill matched. Falling back to normal conversation...[/]")
+                    
+                    accumulated_text = ""
+                    with Live(Padding(Markdown(accumulated_text), (0, 0, 0, 2)), console=console, refresh_per_second=10) as live:
+                        for chunk in gemini_provider.send_message_stream(user_input):
+                            accumulated_text += chunk
+                            live.update(Padding(Markdown(accumulated_text), (0, 0, 0, 2)))
             else:
                 response = f"  You just said: {user_input}"
                 console.print(response, style="green")
