@@ -85,9 +85,21 @@ class GeminiProvider:
             try:
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    
+                    # Clean the history data to prevent Pydantic validation errors on newer SDK versions
+                    # We remove 'None' values and explicitly forbid known problematic keys
+                    for msg in data:
+                        if 'parts' in msg:
+                            for part in msg['parts']:
+                                keys_to_remove = [
+                                    k for k, v in part.items() 
+                                    if v is None or k in ['tool_call', 'tool_response', 'part_metadata', 'executable_code', 'code_execution_result']
+                                ]
+                                for k in keys_to_remove:
+                                    part.pop(k, None)
                     return data
             except Exception as e:
-                print(f"\n[bold yellow]Old history is corrupted ({e}). Automatically resetting to a new chat session![/]")
+                print(f"\n[bold yellow]Old history is corrupted or incompatible ({e}). Automatically resetting to a new chat session![/]")
                 try:
                     os.remove(self.history_file)
                 except:
@@ -107,10 +119,10 @@ class GeminiProvider:
             data: List[Dict[str, Any]] = []
             for c in contents:
                 try:
-                    data.append(c.model_dump(mode='json'))
+                    data.append(c.model_dump(mode='json', exclude_none=True))
                 except TypeError:
                     # Fallback if an older version of Pydantic does not support mode='json'
-                    data.append(c.model_dump())
+                    data.append(c.model_dump(exclude_none=True))
             
             # Create a Custom Encoder as a fallback in case bytes still remain
             class SafeEncoder(json.JSONEncoder):

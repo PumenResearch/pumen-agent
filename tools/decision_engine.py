@@ -40,8 +40,18 @@ class DecisionEngine:
         """
         prompt = self.prompt_builder.build_decision_prompt(user_prompt)
         
-        # Send the prompt to the LLM to get the decision
-        response = self.llm.send_message(prompt)
+        # Send the prompt statelessly to the LLM to avoid polluting the main chat history
+        try:
+            api_response = self.llm.client.models.generate_content(
+                model=self.llm.model_name,
+                contents=prompt
+            )
+            response = api_response.text
+        except Exception as e:
+            return {
+                "analysis": f"API error during decision making: {e}",
+                "skill": "UNKNOWN"
+            }
         
         # Clean the response to parse JSON safely
         try:
