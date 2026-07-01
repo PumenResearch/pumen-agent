@@ -1,0 +1,2 @@
+[console_scripts]
+pumen = main:main

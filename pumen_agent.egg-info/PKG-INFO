@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: pumen-agent
+Version: 0.1.0
+Summary: CLI Agent độc quyền của Pumen
+Requires-Dist: rich>=13.0.0
+Requires-Dist: prompt_toolkit>=3.0.0
+Requires-Dist: google-genai
+Requires-Dist: python-dotenv
