@@ -1,8 +1,14 @@
 <p align="center">
-  <img src="pumen_logo.png" alt="Pumen Agent Logo" width="300">
+  <img src="pumen_logo.png" alt="Pumen Agent Logo" width="100%">
 </p>
 
 # Pumen Agent
+<p align="center">
+  <img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English">
+  <img src="https://img.shields.io/badge/Lang-Vietnamese-red?style=for-the-badge" alt="Vietnamese">
+  <img src="https://img.shields.io/badge/Chat-Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
+  <img src="https://img.shields.io/badge/Chat-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
+</p>
 
 **Pumen Agent** is an exclusive smart AI assistant project by Pumen, currently in its early stages of development. The project provides an interactive Command Line Interface (CLI) and supports automating browser tasks using Large Language Models (LLMs).
 
@@ -24,7 +30,7 @@
    ```
 
 2. **Create a Python virtual environment**
-   Ensure you have Python 3.10 or higher installed.
+   Ensure you have Python 3.11.5 installed.
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows, use: venv\Scripts\activate
@@ -46,13 +52,3 @@
    ```bash
    python main.py
    ```
-
-## 🛠 Tech Stack
-
-The project is built with the following core technologies:
-
-- **Language**: Python 3.x
-- **CLI & TUI**: [Rich](https://github.com/Textualize/rich) (for colors and layout), [prompt_toolkit](https://python-prompt-toolkit.readthedocs.io/) (for prompts, history, and autocomplete)
-- **AI Provider**: Google GenAI (Gemini Models)
-- **Browser Automation**: `browser-use`, `Playwright`, `asyncio`
-- **Configuration Management**: `python-dotenv`
