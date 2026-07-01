@@ -1,0 +1,8 @@
+venv/*
+.agents/*
+browser-use-user-data-dir-custom/*
+chrome_profile/*
+__pycache__/*
+.env
+**/__pycache__/
+*.pyc
