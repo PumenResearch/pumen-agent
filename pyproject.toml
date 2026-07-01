@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pumen-agent"
+version = "0.1.0"
+description = "CLI Agent độc quyền của Pumen"
+dependencies = [
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+    "google-genai",
+    "python-dotenv"
+]
+
+[project.scripts]
+# ĐÂY LÀ PHÉP THUẬT: 
+# Khi gõ "pumen", hệ thống sẽ tìm đến file "main" và chạy hàm "main()"
+pumen = "main:main"
+
+[tool.setuptools]
+# Khai báo cho Python biết cấu trúc thư mục của bạn gồm file main.py và folder cli/
+py-modules = ["main"]
+packages = ["cli"]
