@@ -1,4 +1,4 @@
 {
   "provider": "gemini",
-  "model": "unknown"
+  "model": "models/gemini-3.1-flash-lite"
 }

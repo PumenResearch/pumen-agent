@@ -40,7 +40,7 @@ def get_user_data_dir() -> str:
     Returns:
         str: Absolute path to the user data directory.
     """
-    user_data_dir = PROJECT_ROOT / "browser-use-user-data-dir-custom"
+    user_data_dir = PROJECT_ROOT / "browser_profile" / "chrome" / "browser-use-user-data-dir-custom"
     os.makedirs(user_data_dir, exist_ok=True)
     return str(user_data_dir)
 
