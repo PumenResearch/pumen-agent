@@ -6,3 +6,5 @@ Requires-Dist: rich>=13.0.0
 Requires-Dist: prompt_toolkit>=3.0.0
 Requires-Dist: google-genai
 Requires-Dist: python-dotenv
+Requires-Dist: python-telegram-bot>=20.0
+Requires-Dist: questionary>=2.0.0

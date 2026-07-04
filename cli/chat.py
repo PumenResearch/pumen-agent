@@ -18,7 +18,6 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.styles import Style
 from commands import handle_command, COMMANDS
-from providers.gemini import GeminiProvider
 
 class CommandCompleter(Completer):
     """
@@ -54,10 +53,16 @@ class CommandCompleter(Completer):
         # Check for subcommand first (e.g., model selection)
         if text.startswith('/model '):
             word = text[len('/model '):].lower()
-            from providers.gemini.client import AVAILABLE_MODELS
+            from providers import get_available_models
+            from cli.chat import CURRENT_PROVIDER
+            
+            # Note: Fetching models dynamically on every keystroke might be slow,
+            # but we can cache it or let the user type if it's too slow.
+            # For simplicity, we just fetch them. 
+            available_models = get_available_models(CURRENT_PROVIDER)
             
             # Add an option to return to the previous menu
-            options = ["<-- Back to command menu"] + AVAILABLE_MODELS
+            options = ["<-- Back to command menu"] + available_models
             
             for m in options:
                 if m.lower().startswith(word):
@@ -71,6 +76,43 @@ class CommandCompleter(Completer):
                     else:
                         meta_text = "⚡ Change AI Model for the current chat session"
                         replacement = m
+                        start_pos = -len(word)
+                        
+                    total_width = max(20, self.console.width - 3)
+                    remaining = total_width - len(col1)
+                    
+                    if len(meta_text) > remaining:
+                        meta_text = meta_text[:max(0, remaining - 3)] + "..."
+                    else:
+                        meta_text = meta_text.ljust(remaining)
+                        
+                    full_line = col1 + meta_text
+
+                    yield Completion(
+                        replacement,
+                        start_position=start_pos,
+                        display=full_line,
+                        display_meta=""
+                    )
+        elif text.startswith('/provider '):
+            word = text[len('/provider '):].lower()
+            from providers import SUPPORTED_PROVIDERS
+            available_providers = list(SUPPORTED_PROVIDERS.keys())
+            
+            options = ["<-- Back to command menu"] + available_providers
+            
+            for p in options:
+                if p.lower().startswith(word):
+                    display_text = f" {p}"
+                    col1 = display_text.ljust(35)
+                    
+                    if p == "<-- Back to command menu":
+                        meta_text = "⚡ Cancel provider change and return to command list"
+                        replacement = "/"
+                        start_pos = -len(text)
+                    else:
+                        meta_text = "⚡ Change AI Provider for the current chat session"
+                        replacement = p
                         start_pos = -len(word)
                         
                     total_width = max(20, self.console.width - 3)
@@ -114,8 +156,8 @@ class CommandCompleter(Completer):
                     # Merge into a single display string
                     full_line = col1 + meta_text
                     
-                    # Automatically add a space if the command is 'model' so the second menu appears immediately
-                    replacement_text = f"/{cmd} " if cmd == "model" else f"/{cmd}"
+                    # Automatically add a space if the command is 'model' or 'provider' so the second menu appears immediately
+                    replacement_text = f"/{cmd} " if cmd in ["model", "provider"] else f"/{cmd}"
                     
                     yield Completion(
                         replacement_text,
@@ -137,8 +179,37 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.layout.containers import ConditionalContainer
 from prompt_toolkit.filters import has_completions
 
+import os
+import json
+
+CONFIG_FILE = "cli_config.json"
+
+def load_user_config() -> dict:
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_user_config(provider: str, model: str) -> None:
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"provider": provider, "model": model}, f, indent=2)
+    except Exception:
+        pass
+
+_config = load_user_config()
+
 # Global variable storing the current model
-CURRENT_MODEL: str = "gemini-2.5-flash"
+CURRENT_MODEL: str = _config.get("model")
+CURRENT_PROVIDER: str = _config.get("provider")
+
+def get_provider_instance(provider_name: str, model_name: str) -> Any:
+    """Instantiate the unified provider."""
+    from providers import UniversalProvider
+    return UniversalProvider(provider_name=provider_name, model_name=model_name)
 
 def start_chat_session() -> None:
     """
@@ -146,7 +217,7 @@ def start_chat_session() -> None:
 
     This function sets up the Rich console, prompt_toolkit application,
     key bindings, and handles the main event loop for reading user input
-    and displaying responses from the Gemini AI model.
+    and displaying responses from the AI model.
     """
     console = Console(color_system="truecolor")
     
@@ -154,18 +225,16 @@ def start_chat_session() -> None:
     console.print("\n[bold yellow]System ready! Type '/' to use commands, 'exit' or 'quit' to exit.[/]\n")
     
     try:
-        from providers.gemini.client import fetch_models_async
-        fetch_models_async() # Preload models
-        gemini_provider: Optional[GeminiProvider] = GeminiProvider(model_name=CURRENT_MODEL)
-        console.print("[green]Successfully connected to Gemini![/]\n")
+        llm_provider = get_provider_instance(CURRENT_PROVIDER, CURRENT_MODEL)
+        console.print(f"[green]Successfully connected to {CURRENT_PROVIDER}![/]\n")
         
         from tools import SkillRegistry, DecisionEngine
         registry = SkillRegistry()
-        decision_engine: Optional[DecisionEngine] = DecisionEngine(registry, llm_provider=gemini_provider)
+        decision_engine: Optional[DecisionEngine] = DecisionEngine(registry, llm_provider=llm_provider)
         console.print("[green]Decision Engine initialized![/]\n")
     except Exception as e:
-        console.print(f"[bold red]Failed to initialize Gemini or Tools: {e}[/]\n")
-        gemini_provider = None
+        console.print(f"[bold red]Failed to initialize AI Provider or Tools: {e}[/]\n")
+        llm_provider = None
         decision_engine = None
 
     completer = CommandCompleter(console)
@@ -239,7 +308,7 @@ def start_chat_session() -> None:
                     completion = input_buffer.complete_state.current_completion
                     
                     # If it's a command to switch menu page (like /model or Back button)
-                    if completion.text in ["/model ", "/"]:
+                    if completion.text in ["/model ", "/provider ", "/"]:
                         # Insert text into the input field but DO NOT SEND COMMAND (let the next suggestion menu appear)
                         input_buffer.apply_completion(completion)
                         # Trigger the new suggestion menu immediately
@@ -294,19 +363,25 @@ def start_chat_session() -> None:
                 break
                 
             # Agent's response
-            if gemini_provider:
-                # Check if the user changed the model via the /model command
-                if gemini_provider.model_name != CURRENT_MODEL:
-                    console.print(f"[dim]Reinitializing chat session with model {CURRENT_MODEL}...[/]")
-                    gemini_provider = GeminiProvider(model_name=CURRENT_MODEL)
-                    if decision_engine:
-                        decision_engine.llm = gemini_provider
+            if llm_provider:
+                # Check if the user changed the model or provider via commands
+                provider_changed = getattr(llm_provider, "provider_name", "") != CURRENT_PROVIDER
+                model_changed = getattr(llm_provider, "model_name", "") != CURRENT_MODEL
+                
+                if provider_changed or model_changed:
+                    console.print(f"[dim]Reinitializing chat session with provider {CURRENT_PROVIDER} and model {CURRENT_MODEL}...[/]")
+                    try:
+                        llm_provider = get_provider_instance(CURRENT_PROVIDER, CURRENT_MODEL)
+                        if decision_engine:
+                            decision_engine.llm = llm_provider
+                    except Exception as e:
+                        console.print(f"[bold red]Failed to switch provider/model: {e}[/]")
 
                 chosen_skill = "UNKNOWN"
                 if decision_engine:
                     with console.status("[dim]Analyzing task intent...[/]", spinner="dots"):
                         decision = decision_engine.decide_skill(user_input)
-                    console.print("[dim]✔ Analyzing task intent...[/]")
+                    console.print("[dim]↻ Analyzing task intent...[/]")
                     chosen_skill = decision.get("skill", "UNKNOWN")
                     
                     if chosen_skill != "UNKNOWN":
@@ -323,7 +398,7 @@ def start_chat_session() -> None:
                                 try:
                                     with console.status("[dim]Executing browser automation task...[/]", spinner="dots"):
                                         history = await runner.run_task(user_input)
-                                    console.print("[dim]✔ Executing browser automation task...[/]")
+                                    console.print("[dim]↻ Executing browser automation task...[/]")
                                     console.print("\n[bold green]Browser task completed![/]")
                                     
                                     # Render the final result natively using rich Markdown
@@ -346,7 +421,7 @@ def start_chat_session() -> None:
                     
                     accumulated_text = ""
                     with Live(Padding(Markdown(accumulated_text), (0, 0, 0, 2)), console=console, refresh_per_second=10) as live:
-                        for chunk in gemini_provider.send_message_stream(user_input):
+                        for chunk in llm_provider.send_message_stream(user_input):
                             accumulated_text += chunk
                             live.update(Padding(Markdown(accumulated_text), (0, 0, 0, 2)))
             else:

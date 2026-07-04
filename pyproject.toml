@@ -10,7 +10,9 @@ dependencies = [
     "rich>=13.0.0",
     "prompt_toolkit>=3.0.0",
     "google-genai",
-    "python-dotenv"
+    "python-dotenv",
+    "python-telegram-bot>=20.0",
+    "questionary>=2.0.0"
 ]
 
 [project.scripts]
@@ -19,6 +21,8 @@ dependencies = [
 pumen = "main:main"
 
 [tool.setuptools]
-# Khai báo cho Python biết cấu trúc thư mục của bạn gồm file main.py và folder cli/
+# Khai báo cho Python biết cấu trúc thư mục của bạn gồm file main.py và các folder package
 py-modules = ["main"]
-packages = ["cli"]
+
+[tool.setuptools.packages.find]
+exclude = ["venv*"]

@@ -1,2 +1,9 @@
+browser-use-user-data-dir-custom
+channels
+chrome_profile
 cli
+commands
 main
+providers
+skills
+tools

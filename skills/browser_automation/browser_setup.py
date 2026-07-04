@@ -32,7 +32,11 @@ def create_browser_profile(headless: bool = False) -> BrowserProfile:
         executable_path=get_chrome_executable_path(),
         user_data_dir=get_user_data_dir(),
         disable_security=True,
-        keep_alive=True
+        keep_alive=True,
+        extra_chromium_args=[
+            "--enable-protected-audience-api",
+            "--widevine-cdm-path"
+        ]
     )
 
 def initialize_browser(headless: bool = False) -> Browser:

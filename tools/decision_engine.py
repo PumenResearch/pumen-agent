@@ -1,7 +1,7 @@
 """
 Decision Engine Module.
 
-Uses the Gemini provider to evaluate a task against available skills
+Uses the Universal Provider to evaluate a task against available skills
 and decide the best course of action.
 """
 
@@ -9,14 +9,14 @@ import json
 from typing import Optional, Dict
 from .prompt_builder import PromptBuilder
 from .skill_registry import SkillRegistry
-from providers.gemini.client import GeminiProvider
+from providers import UniversalProvider
 
 class DecisionEngine:
     """
     Evaluates tasks and selects appropriate skills using an LLM.
     """
     
-    def __init__(self, registry: SkillRegistry, llm_provider: Optional[GeminiProvider] = None) -> None:
+    def __init__(self, registry: SkillRegistry, llm_provider: Optional[UniversalProvider] = None) -> None:
         """
         Initialize the Decision Engine.
 
@@ -25,8 +25,13 @@ class DecisionEngine:
             llm_provider (Optional[GeminiProvider]): The LLM provider to use for decision making.
         """
         self.prompt_builder = PromptBuilder(registry)
-        # Initialize a dedicated LLM instance for decision making
-        self.llm = llm_provider or GeminiProvider(model_name="gemini-2.5-flash")
+        if llm_provider:
+            self.llm = llm_provider
+        else:
+            from cli.chat import CURRENT_PROVIDER, CURRENT_MODEL
+            provider = CURRENT_PROVIDER or "gemini"
+            model = CURRENT_MODEL or "gemini-2.5-flash"
+            self.llm = UniversalProvider(provider_name=provider, model_name=model)
         
     def decide_skill(self, user_prompt: str) -> Dict[str, str]:
         """
@@ -42,11 +47,11 @@ class DecisionEngine:
         
         # Send the prompt statelessly to the LLM to avoid polluting the main chat history
         try:
-            api_response = self.llm.client.models.generate_content(
+            api_response = self.llm.client.chat.completions.create(
                 model=self.llm.model_name,
-                contents=prompt
+                messages=[{"role": "user", "content": prompt}]
             )
-            response = api_response.text
+            response = api_response.choices[0].message.content or ""
         except Exception as e:
             return {
                 "analysis": f"API error during decision making: {e}",

@@ -9,6 +9,7 @@
 browser-use-user-data-dir-custom/
 chrome_profile/
 chat_history.json
+chat_history/*
 logs/
 *.log
 
