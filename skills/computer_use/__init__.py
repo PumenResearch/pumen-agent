@@ -4,10 +4,9 @@ Computer Use Package.
 Placeholder module for computer control tasks.
 """
 
-SKILL_METADATA = {
-    "name": "computer_use",
-    "description": "Control the local computer system, including mouse, keyboard, and OS operations.",
-    "usage": "Describe the OS-level action or automation required."
-}
+from .skill import ComputerUseSkill
 
-__all__ = ["SKILL_METADATA"]
+SKILL_METADATA = ComputerUseSkill.get_tool_schema()
+SKILL_CLASS = ComputerUseSkill
+
+__all__ = ["SKILL_METADATA", "SKILL_CLASS"]

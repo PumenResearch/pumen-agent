@@ -191,29 +191,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await processing_msg.edit_text(f"🔍 Skill selected: {chosen_skill}\nReasoning: {reasoning}")
 
             # 2. Execute the chosen skill
-            if chosen_skill == "browser_automation":
-                await update.message.reply_text("🌐 Đang khởi chạy trình duyệt tự động, quá trình này có thể mất chút thời gian...")
-                from skills.browser_automation import initialize_browser, BrowserAgentRunner
+            await update.message.reply_text(f"Đang thực thi kỹ năng {chosen_skill}...")
+            
+            try:
+                # We extract the arguments from the decision engine's tool call parsing
+                tool_args = decision.get("arguments", {})
                 
-                # Headless=True is recommended for background bots without a GUI
-                browser = initialize_browser()
-                runner = BrowserAgentRunner(browser)
+                # Dynamically execute through the unified skill registry
+                result = await registry.execute_tool(chosen_skill, **tool_args)
                 
-                try:
-                    history = await runner.run_task(user_text)
-                    final_result = history.final_result()
-                    # We output as raw text to avoid Markdown parsing errors in Telegram
-                    await update.message.reply_text(f"Kết quả Browser:\n\n{final_result}")
-                except Exception as ex:
-                    await update.message.reply_text(f"Lỗi tự động hoá trình duyệt: {ex}")
-                finally:
-                    # Depending on browser-use implementation, we may need to explicitly close browser
-                    pass 
-
-            elif chosen_skill == "computer_use":
-                await update.message.reply_text("Kỹ năng 'computer_use' chưa được tích hợp hoàn chỉnh cho Telegram.")
-            else:
-                await update.message.reply_text(f"Kỹ năng '{chosen_skill}' hiện chưa được cấu hình thực thi qua Telegram.")
+                # We output as raw text to avoid Markdown parsing errors in Telegram
+                await update.message.reply_text(f"{str(result)}")
+            except Exception as ex:
+                await update.message.reply_text(f"Lỗi thực thi kỹ năng '{chosen_skill}': {ex}")
         
         else:
             # 3. Fallback to standard chat conversation

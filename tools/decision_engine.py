@@ -2,12 +2,11 @@
 Decision Engine Module.
 
 Uses the Universal Provider to evaluate a task against available skills
-and decide the best course of action.
+and decide the best course of action using Native Function Calling.
 """
 
 import json
-from typing import Optional, Dict
-from .prompt_builder import PromptBuilder
+from typing import Optional, Dict, Any
 from .skill_registry import SkillRegistry
 from providers import UniversalProvider
 
@@ -22,9 +21,9 @@ class DecisionEngine:
 
         Args:
             registry (SkillRegistry): The registry containing available skills.
-            llm_provider (Optional[GeminiProvider]): The LLM provider to use for decision making.
+            llm_provider (Optional[UniversalProvider]): The LLM provider to use for decision making.
         """
-        self.prompt_builder = PromptBuilder(registry)
+        self.registry = registry
         if llm_provider:
             self.llm = llm_provider
         else:
@@ -33,49 +32,60 @@ class DecisionEngine:
             model = CURRENT_MODEL or "gemini-2.5-flash"
             self.llm = UniversalProvider(provider_name=provider, model_name=model)
         
-    def decide_skill(self, user_prompt: str) -> Dict[str, str]:
+    def decide_skill(self, user_prompt: str) -> Dict[str, Any]:
         """
-        Decide which skill to use based on the user's prompt.
+        Decide which skill to use based on the user's prompt using Function Calling.
 
         Args:
             user_prompt (str): The user's task or query.
 
         Returns:
-            Dict[str, str]: A dictionary containing 'analysis' and 'skill'.
+            Dict[str, Any]: A dictionary containing 'skill', 'arguments', and 'analysis'.
         """
-        prompt = self.prompt_builder.build_decision_prompt(user_prompt)
+        tools = self.registry.get_all_tool_schemas()
         
-        # Send the prompt statelessly to the LLM to avoid polluting the main chat history
+        # System instructions with heuristics
+        system_msg = (
+            "You are an intelligent orchestrator agent. "
+            "Analyze the user's prompt and decide if you need to use any available tools.\n"
+            "HEURISTICS:\n"
+            "- If the task involves searching the web, navigating websites, or interacting with web content, ALWAYS prioritize 'browser_automation'.\n"
+            "- Only use 'computer_use' for purely local OS-level tasks.\n"
+        )
+        
         try:
-            api_response = self.llm.client.chat.completions.create(
-                model=self.llm.model_name,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            response = api_response.choices[0].message.content or ""
+            kwargs = {
+                "model": self.llm.model_name,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_prompt}
+                ]
+            }
+            if tools:
+                kwargs["tools"] = tools
+                
+            api_response = self.llm.client.chat.completions.create(**kwargs)
+            message = api_response.choices[0].message
+            
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                tool_call = message.tool_calls[0]
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments)
+                return {
+                    "skill": tool_name,
+                    "arguments": tool_args,
+                    "analysis": f"LLM decided to call {tool_name}"
+                }
+            else:
+                return {
+                    "skill": "UNKNOWN",
+                    "arguments": {},
+                    "analysis": "No tool call was made.",
+                    "response": message.content
+                }
         except Exception as e:
             return {
-                "analysis": f"API error during decision making: {e}",
-                "skill": "UNKNOWN"
-            }
-        
-        # Clean the response to parse JSON safely
-        try:
-            clean_response = response.strip()
-            if clean_response.startswith("```json"):
-                clean_response = clean_response[7:]
-            elif clean_response.startswith("```"):
-                clean_response = clean_response[3:]
-                
-            if clean_response.endswith("```"):
-                clean_response = clean_response[:-3]
-                
-            decision = json.loads(clean_response.strip())
-            return {
-                "analysis": decision.get("analysis", "No analysis provided."),
-                "skill": decision.get("skill", "UNKNOWN")
-            }
-        except Exception as e:
-            return {
-                "analysis": f"Failed to parse LLM response: {e}. Raw response: {response}",
-                "skill": "UNKNOWN"
+                "skill": "UNKNOWN",
+                "arguments": {},
+                "analysis": f"API error during decision making: {e}"
             }

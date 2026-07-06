@@ -2,7 +2,7 @@
 Skill Registry Module.
 
 Maintains a registry of available skills and their metadata. This registry
-is used to inform the agent of what actions it can take.
+is used to inform the agent of what actions it can take via Function Calling.
 It automatically discovers skills from the 'skills' package.
 """
 
@@ -15,7 +15,7 @@ from pathlib import Path
 class SkillRegistry:
     """
     Registry for managing available skills by auto-discovering them
-    from the 'skills' directory.
+    from the 'skills' directory and dispatching executions.
     """
     
     def __init__(self, skills_package: str = "skills") -> None:
@@ -31,7 +31,7 @@ class SkillRegistry:
         
     def _discover_skills(self) -> None:
         """
-        Scan the skills package and load any module that defines SKILL_METADATA.
+        Scan the skills package and load any module that defines SKILL_METADATA and SKILL_CLASS.
         """
         try:
             # Import the root package for skills
@@ -50,40 +50,48 @@ class SkillRegistry:
                 full_module_name = f"{self.skills_package}.{module_name}"
                 try:
                     module = importlib.import_module(full_module_name)
-                    # Check if the module exposes SKILL_METADATA
-                    if hasattr(module, 'SKILL_METADATA'):
-                        metadata = getattr(module, 'SKILL_METADATA')
-                        name = metadata.get("name", module_name)
+                    # Check if the module exposes SKILL_METADATA and SKILL_CLASS
+                    if hasattr(module, 'SKILL_METADATA') and hasattr(module, 'SKILL_CLASS'):
+                        schema = getattr(module, 'SKILL_METADATA')
+                        skill_class = getattr(module, 'SKILL_CLASS')
+                        
+                        # In OpenAI schema, the name is in schema["function"]["name"]
+                        if "function" in schema and "name" in schema["function"]:
+                            name = schema["function"]["name"]
+                        else:
+                            name = schema.get("name", module_name)
+                            
                         self._skills[name] = {
                             "name": name,
-                            "description": metadata.get("description", "No description provided."),
-                            "usage": metadata.get("usage", "No usage provided.")
+                            "schema": schema,
+                            "class": skill_class
                         }
                 except Exception as e:
                     print(f"Failed to load skill module '{full_module_name}': {e}")
         
-    def get_all_skills(self) -> List[Dict[str, Any]]:
+    def get_all_tool_schemas(self) -> List[Dict[str, Any]]:
         """
-        Retrieve all registered skills.
+        Retrieve all registered skill schemas for Function Calling.
 
         Returns:
-            List[Dict[str, Any]]: A list of skill metadata dictionaries.
+            List[Dict[str, Any]]: A list of skill schemas.
         """
-        return list(self._skills.values())
+        return [info["schema"] for info in self._skills.values()]
     
-    def get_skill_descriptions(self) -> str:
+    async def execute_tool(self, tool_name: str, **kwargs) -> Any:
         """
-        Format all skills into a readable string for prompts.
-
+        Dynamically execute a tool/skill by its name.
+        
+        Args:
+            tool_name (str): The name of the skill to execute.
+            **kwargs: Arguments to pass to the skill's execute method.
+            
         Returns:
-            str: Formatted skill descriptions.
+            Any: The result of the skill execution.
         """
-        if not self._skills:
-            return "No skills currently available."
-            
-        descriptions = []
-        for name, info in self._skills.items():
-            desc = f"- **{name}**: {info['description']}\n  *Usage*: {info['usage']}"
-            descriptions.append(desc)
-            
-        return "\n".join(descriptions)
+        if tool_name not in self._skills:
+            raise ValueError(f"Skill '{tool_name}' not found in registry.")
+        
+        skill_class = self._skills[tool_name]["class"]
+        skill_instance = skill_class()
+        return await skill_instance.execute(**kwargs)

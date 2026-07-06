@@ -386,33 +386,26 @@ def start_chat_session() -> None:
                     
                     if chosen_skill != "UNKNOWN":
                         console.print(f"[bold green]Skill selected:[/] {chosen_skill}")
-                        console.print(f"[dim]Reasoning: {decision.get('analysis')}[/]")
+                        console.print(f"[dim]Arguments: {decision.get('arguments')}[/]")
                         
-                        if chosen_skill == "browser_automation":
-                            import asyncio
-                            from skills.browser_automation import initialize_browser, BrowserAgentRunner
-                            
-                            async def run_browser_task():
-                                browser = initialize_browser(headless=False)
-                                runner = BrowserAgentRunner(browser)
-                                try:
-                                    with console.status("[dim]Executing browser automation task...[/]", spinner="dots"):
-                                        history = await runner.run_task(user_input)
-                                    console.print("[dim]↻ Executing browser automation task...[/]")
-                                    console.print("\n[bold green]Browser task completed![/]")
-                                    
-                                    # Render the final result natively using rich Markdown
-                                    from rich.markdown import Markdown
-                                    console.print(Markdown(history.final_result()))
-                                except Exception as e:
-                                    console.print(f"[bold red]Browser automation failed: {e}[/]")
-                                    
-                            asyncio.run(run_browser_task())
-                            
-                        elif chosen_skill == "computer_use":
-                            console.print("[yellow]Computer use skill is a placeholder and not yet fully implemented.[/]")
-                        else:
-                            console.print(f"[yellow]Skill '{chosen_skill}' is registered but not explicitly wired for execution yet.[/]")
+                        import asyncio
+                        
+                        async def run_task():
+                            try:
+                                with console.status(f"[dim]Executing {chosen_skill}...[/]", spinner="dots"):
+                                    result = await registry.execute_tool(chosen_skill, **decision.get('arguments', {}))
+                                console.print(f"[dim]↻ Executing {chosen_skill}...[/]")
+                                console.print(f"\n[bold green]Task completed![/]")
+                                
+                                from rich.markdown import Markdown
+                                if isinstance(result, str):
+                                    console.print(Markdown(result))
+                                else:
+                                    console.print(str(result))
+                            except Exception as e:
+                                console.print(f"[bold red]Task failed: {e}[/]")
+                                
+                        asyncio.run(run_task())
 
                 # Fallback to normal chat if UNKNOWN
                 if chosen_skill == "UNKNOWN":

@@ -6,25 +6,43 @@ using the Gemini model.
 """
 
 from typing import Any
-from browser_use import Browser, Agent, ChatGoogle
-from .config import get_gemini_api_key
+from browser_use import Browser, Agent
+from .config import get_current_llm_config
 
 class BrowserAgentRunner:
     """
-    A class to run browser automation tasks using the Gemini model.
+    A class to run browser automation tasks using the selected LLM.
     """
 
-    def __init__(self, browser: Browser, model_name: str = "gemini-3.1-flash-lite") -> None:
+    def __init__(self, browser: Browser) -> None:
         """
         Initialize the BrowserAgentRunner.
 
         Args:
             browser (Browser): The Browser instance to use.
-            model_name (str): The name of the Gemini model to use.
         """
         self.browser = browser
-        self.api_key = get_gemini_api_key()
-        self.llm = ChatGoogle(model=model_name, api_key=self.api_key)
+        config = get_current_llm_config()
+        
+        provider = config.get("provider", "openai")
+        model = config["model"]
+        api_key = config["api_key"]
+        base_url = config.get("base_url")
+        
+        # All providers in Pumen Agent are standardized to use the OpenAI compatible API
+        from browser_use import ChatOpenAI
+        
+        # Disable frequency_penalty as some OpenAI compatible endpoints (like Gemini) 
+        # do not support it and will throw a 400 Bad Request error.
+        kwargs = {
+            "model": model, 
+            "api_key": api_key,
+            "frequency_penalty": None
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+            
+        self.llm = ChatOpenAI(**kwargs)
 
     async def run_task(self, task_description: str) -> Any:
         """
